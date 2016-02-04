@@ -42,7 +42,7 @@ class Spi_import < Qt::Widget
   def select_import_file
     @filepath = Qt::FileDialog.getOpenFileName(self, tr('Select a file'), '/', tr('Bin file (*.bin)'))
     unless @filepath.nil?
-      $file = File.open("#{@filepath}", 'w')
+      $file = File.open("#{@filepath}", 'rb')
       @spi_import_gui.btn_import.setEnabled(true)
     end
   rescue Exception => msg
@@ -66,15 +66,20 @@ class Spi_import < Qt::Widget
     start = @spi_import_gui.lie_start.text.to_i
     Firmware.new(@api, 'SPI')
     time = Time.new
-    @api.spi_Generic_Dump(@chip_settings.spi_mode, @speeds[@chip_settings.spi_frequency], @chip_settings.spi_command_read, @spi_import_gui.lie_start.text.to_i, @chip_settings.spi_total_size.to_i)
+    @api.spi_Generic_Push(@chip_settings.spi_mode, @speeds[@chip_settings.spi_frequency], 0x02, 0, @chip_settings.spi_total_size - 1, @chip_settings.spi_total_size.to_i, @chip_settings.spi_page_size)
+    close_file
+    control_import_result(time)
   rescue Exception => msg
       logger = Logger.new($logFilePath)
       logger.error msg
       Qt::MessageBox.new(Qt::MessageBox::Critical, 'Critical error', 'Error occured while partial import operation. Consult the logs for more details').exec
   end
 
-  def control_import_result(type, stop, pathfile, time)
-    # TO COME
+  def control_import_result(time)
+    time = Time.new - time
+    file_size = File.size(@filepath)
+    Qt::MessageBox.new(Qt::MessageBox::Information, 'Information', "Pushed finished at #{((file_size / time)).round(2)}Bytes/s (#{(file_size)} Bytes in  #{time.round(4)} s)").exec
+    p "DUMP #{((file_size / time)).round(2)}Bytes/s (#{(file_size)}Bytes in  #{time.round(4)} s)"
   end
 
   def control_import_settings
@@ -87,7 +92,7 @@ class Spi_import < Qt::Widget
       Qt::MessageBox.new(Qt::MessageBox::Warning, 'Missing SPI settings', 'Total size or page size settings missing').exec
       return 0
     end
-    if @chip_settings.spi_read_command.nil? || @chip_settings.spi_frequency.nil?
+    if @chip_settings.spi_frequency.nil?
       Qt::MessageBox.new(Qt::MessageBox::Warning, 'Missing SPI settings', 'Read command or frequency settings missing').exec
       return 0
     end
